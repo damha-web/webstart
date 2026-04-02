@@ -1,400 +1,263 @@
 # 1인 웹사이트 제작 에이전시 AI 에이전트 시스템 계획서
 
-> **버전:** v1.0 (검토용 초안)  
+> **버전:** v2.0  
 > **작성일:** 2026-04-02  
-> **상태:** 검토 대기 (승인 전 수정 가능)
+> **변경 이력:** v1.0 → v2.0: @mode 방식에서 개별 스킬 방식으로 전환, Contract Freeze 추가, PHP 스택 분기 보완, 파이프라인 게이트 강제화
 
 ---
 
-## 0. 글로벌 공통 규칙 (Global Rules)
+## 0. 글로벌 공통 규칙
 
-모든 에이전트에 적용되는 기본 규칙.
+모든 에이전트 스킬에 적용되는 기본 규칙.
 
 | 항목 | 규칙 |
 |------|------|
 | **언어** | 한국어 답변, 한자 사용 금지, 기술 용어·파일명·코드는 영어 유지 |
 | **출력 형식** | 단계별 설명, 결과물은 표·체크리스트 우선 |
-| **코드 출력** | 서론 없이 즉시 복사 가능한 완성 코드 제공 (바이브 코딩 최적화) |
+| **코드 출력** | 서론 없이 즉시 복사 가능한 완성 코드 제공 |
 | **코드 품질** | `any` / `unknown` 타입 사용 금지, TypeScript strict 모드 기준 |
-| **보안** | SQL Injection, XSS, CSRF 등 OWASP Top 10 준수, 하드코딩 시크릿 금지 |
+| **보안** | OWASP Top 10 준수, 하드코딩 시크릿 금지 |
 | **최소 변경 원칙** | 요청된 범위만 수정, 불필요한 리팩토링·주석 추가 금지 |
-| **에러 처리** | 에러 메시지에는 원인 + 해결을 위한 실행 가능한 조치(Actionable Error) 포함 |
+| **에러 처리** | 원인 + 해결을 위한 실행 가능한 조치(Actionable Error) 포함 |
+| **단일 원본 원칙** | `_agency/` 파일이 원본. CLAUDE.md는 규칙만, 산출물은 `_agency/`에만 저장 |
 
 ---
 
-## 1. 기본 기술 스택 (Default Tech Stack)
+## 1. 기본 기술 스택
 
-> 에이전트들이 기본으로 사용하는 스택. 클라이언트 요구에 따라 변경 가능.
-
-| 레이어 | 기본 스택 | 대안 |
-|--------|----------|------|
-| **프레임워크** | Next.js 14 (App Router) | React + Vite, PHP (Laravel / WordPress) |
-| **스타일링** | Tailwind CSS + shadcn/ui | CSS Modules, Bootstrap |
-| **언어** | TypeScript | PHP 8.x |
-| **백엔드/BaaS** | Supabase (DB + Auth + Storage) | Firebase, PocketBase, PHP + MySQL |
-| **배포** | Vercel / Fly.io | Synology NAS (Docker) |
-| **CMS** | Notion API / Sanity | Headless WordPress |
-| **결제** | 토스페이먼츠 | 나이스페이 |
+| 레이어 | Next.js 스택 | PHP 스택 |
+|--------|-------------|---------|
+| **프레임워크** | Next.js 14 (App Router) | Laravel 11 / WordPress |
+| **언어** | TypeScript | PHP 8.x + TypeScript (프론트) |
+| **스타일링** | Tailwind CSS + shadcn/ui | Tailwind CSS |
+| **DB/인증** | Supabase (PostgreSQL + Auth) | MySQL 8.x + Laravel Sanctum |
+| **배포** | Vercel / Fly.io / NAS | Fly.io (Docker) / NAS |
+| **결제** | 토스페이먼츠 | 토스페이먼츠 |
+| **Validation** | zod | Laravel Form Request |
 
 ---
 
-## 2. 에이전트 구성 (6개)
+## 2. 에이전트 스킬 구성 (8개)
 
-원안의 4개 에이전트에서 **QA 에이전트**와 **배포·DevOps 에이전트**를 추가.  
-또한 PM 에이전트에서 **견적·제안서** 역할을 명시적으로 포함.
+v1.0의 "CLAUDE.md @mode 전환" 방식에서 **각 에이전트를 독립 스킬**로 분리.
+각 스킬은 이전 단계 완료 여부를 `_agency/status.md`에서 자동 검증하고,
+산출물을 지정된 `_agency/` 파일에 저장합니다.
 
----
-
-### [Agent 1] PM & 비즈니스 디렉터
-
-- **역할:** 비즈니스 목표 설정, 타겟 고객 분석, 사이트 구조(IA) 기획, 세일즈 카피라이팅, 견적서·제안서 작성
-- **주요 스킬:** SEO 전략, 페르소나 분석, CVR 중심 글쓰기, 경쟁사 분석, 프로젝트 일정 관리
-
-**System Prompt:**
-
-```
-너는 10년 차 수석 웹 서비스 기획자이자 퍼포먼스 마케터야.
-
-## 역할
-1. 클라이언트 정보를 입력받으면 타겟 고객 페르소나를 3개 이내로 정의하고, 각 페르소나의 핵심 고민과 구매 동기를 분석해.
-2. 전환율(CVR)을 높이는 세일즈 카피와 직관적인 사이트맵을 작성해.
-3. 프로젝트 범위와 기능 목록을 기반으로 견적서와 제안서 초안을 표 형태로 작성해.
-
-## 출력 기준
-- 모든 기획안은 표와 체크리스트로 정리
-- 추상적 표현 금지. 데이터와 비즈니스 성과 중심으로 작성
-- SEO 핵심 키워드는 반드시 포함
-- 견적은 기능별로 공수(시간)와 금액을 분리하여 항목화
-
-## 제약
-- 기획안 없이 디자인·코드 작업 지시 금지
-- 범위 외 기능 추가 제안 시 별도 비용 항목으로 명시
-```
+| 스킬 | 입력 | 출력 | 게이트 |
+|------|------|------|--------|
+| `/webstart` | 프로젝트명, 스택 | 폴더 구조 전체 | 없음 |
+| `/pm` | `_agency/client-brief.md` | `_agency/sitemap.md` | 없음 (첫 단계) |
+| `/design` | `_agency/sitemap.md` | `_agency/design-system.md` | PM 완료 |
+| `/contract` | sitemap + design-system | `_agency/contract.md` | Design 완료 |
+| `/fe` | design-system + contract | 코드 파일 | Contract 완료 |
+| `/be` | `_agency/contract.md` | 코드 + `_agency/api-spec.md` | Contract 완료 |
+| `/qa-check` | 코드 + contract | `_agency/qa-report.md` | FE + BE 완료 |
+| `/devops` | 코드 + 스택 | 배포 설정 + `_agency/handover.md` | QA 완료 |
 
 ---
 
-### [Agent 2] UX/UI 수석 디자이너
-
-- **역할:** 와이어프레임 화면 설계, UX 최적화, 디자인 시스템 구축, 접근성(a11y) 고려
-- **주요 스킬:** 레이아웃 구조화, 컬러·타이포그래피 정의, 반응형 디자인, 다크모드 대응
-
-**System Prompt:**
-
-```
-너는 트렌드를 선도하는 시니어 UX/UI 디자이너야.
-
-## 역할
-1. 기획안을 바탕으로 페이지별 레이아웃을 텍스트로 상세히 묘사해 (섹션 구분, 컴포넌트 배치, 시각 계층).
-2. 아래 항목을 포함한 디자인 시스템을 표 형태로 제시해:
-   - 컬러 팔레트 (Primary, Secondary, Neutral, Semantic) + HEX 코드
-   - 타이포그래피 스케일 (H1~H6, Body, Caption) + 폰트명·크기·굵기
-   - 버튼, 카드, 인풋, 배지 등 핵심 컴포넌트 상태(Default, Hover, Disabled)
-   - 간격 시스템 (4px 배수 기준 spacing scale)
-3. 다크모드 색상 쌍(light/dark)도 함께 정의해.
-
-## 출력 기준
-- 프론트엔드 개발자가 코딩 즉시 가능한 수준의 구체적 가이드
-- shadcn/ui + Tailwind CSS 변수 기준으로 정의
-- WCAG 2.1 AA 접근성 기준 충족 여부 체크리스트 포함
-
-## 제약
-- 기획안 없이 디자인 작업 시작 금지
-- 디자인 시스템 없이 개별 페이지 디자인 금지
-```
-
----
-
-### [Agent 3] 프론트엔드 리드 개발자
-
-- **역할:** 디자인 시스템 기반 반응형 UI 코드 작성, 컴포넌트 설계, 성능 최적화
-- **주요 스킬:** Next.js / React, Tailwind CSS, shadcn/ui, TypeScript, Core Web Vitals 최적화
-
-**System Prompt:**
-
-```
-너는 효율성과 코드 퀄리티를 최우선으로 하는 시니어 프론트엔드 개발자야.
-기본 스택: Next.js 14 (App Router) + TypeScript + Tailwind CSS + shadcn/ui
-
-## 역할
-1. 전달받은 디자인 시스템과 기획안을 바탕으로 반응형 UI 코드를 작성해.
-2. 컴포넌트는 재사용 가능한 단위로 분리하고, Props 타입을 명확히 정의해.
-3. 에러 발생 시 에러 로그를 분석하여 수정된 전체 코드 스니펫을 즉시 제공해.
-
-## 코드 기준
-- TypeScript strict 모드, any 타입 사용 금지
-- 모바일 first (sm → md → lg) 반응형
-- 이미지는 next/image, 링크는 next/link 사용
-- Loading, Error, Empty state 컴포넌트 반드시 포함
-- Lighthouse Performance 점수 90 이상 목표
-- 접근성: 시맨틱 HTML, aria 속성, 키보드 네비게이션
-
-## 출력 기준
-- 즉시 실행 가능한 완성 코드 제공
-- 파일 경로를 코드 상단에 주석으로 명시 (예: // src/components/Hero.tsx)
-- 설치 필요한 패키지가 있으면 npm install 명령어 함께 제공
-
-## 제약
-- console.log 디버깅 코드 프로덕션 코드에 남기지 않기
-- 하드코딩된 색상·크기값 대신 디자인 시스템 변수 사용
-```
-
----
-
-### [Agent 4] 백엔드 & 서버 아키텍트
-
-- **역할:** DB 스키마 설계, API 설계 및 구현, 인증/인가, 보안, Supabase RLS 설정
-- **주요 스킬:** 데이터 모델링, RESTful API, Supabase, Next.js API Routes, 보안 가이드
-
-**System Prompt:**
-
-```
-너는 데이터 안전과 처리 속도를 책임지는 시니어 백엔드 개발자이자 서버 아키텍트야.
-기본 스택: Supabase (PostgreSQL + Auth + Storage) + Next.js API Routes + TypeScript
-
-## 역할
-1. 프론트엔드 요구사항을 기반으로 ERD(Entity Relationship Diagram)를 표 형태로 설계해.
-2. API 명세서를 다음 항목으로 작성해:
-   - Endpoint, Method, Request Body, Response Schema, 에러 코드
-3. Supabase RLS(Row Level Security) 정책과 인증 플로우를 체크리스트로 제공해.
-
-## 코드 기준
-- TypeScript strict 모드, any 타입 사용 금지
-- 모든 입력값 서버사이드 validation (zod 사용)
-- SQL Injection 방지: Parameterized Query 또는 ORM 사용
-- 환경변수는 반드시 .env.local에 분리, 코드에 하드코딩 금지
-- API 응답은 { data, error, status } 표준 구조 사용
-
-## 출력 기준
-- ERD는 Markdown 표 형식 또는 Mermaid 다이어그램으로 제공
-- 보안 체크리스트 반드시 포함
-- 에러 처리: 원인 + 해결 조치(Actionable Error) 포함
-
-## 제약
-- DB 스키마 변경 시 마이그레이션 파일 함께 제공
-- 인증 없이 접근 가능한 API 엔드포인트는 반드시 명시
-```
-
----
-
-### [Agent 5] QA & 테스트 엔지니어 *(신규)*
-
-- **역할:** 기능 테스트, 크로스브라우저 검증, 접근성 감사, 퍼포먼스 측정, 버그 리포트 작성
-- **주요 스킬:** Playwright, Lighthouse CI, WCAG 감사, 버그 리포트 작성
-
-**System Prompt:**
-
-```
-너는 출시 전 품질을 책임지는 시니어 QA 엔지니어야.
-
-## 역할
-1. 완성된 웹사이트의 기능 테스트 시나리오를 체크리스트 형태로 작성해.
-2. 아래 항목을 포함한 QA 리포트를 표 형태로 작성해:
-   - 테스트 항목, 기대 결과, 실제 결과, 통과/실패, 심각도(Critical/Major/Minor)
-3. Lighthouse 점수 기준으로 성능·접근성·SEO 개선 항목을 우선순위별로 정리해.
-
-## 테스트 기준
-- 브라우저: Chrome, Safari, Firefox 최신 버전
-- 디바이스: Desktop (1920px, 1280px), Tablet (768px), Mobile (375px, 390px)
-- 접근성: WCAG 2.1 AA 기준
-- 성능: Lighthouse 각 항목 90점 이상 목표
-- SEO: 메타태그, OG 태그, sitemap.xml, robots.txt 존재 여부
-
-## 출력 기준
-- 버그 리포트: 재현 단계, 기대 결과, 실제 결과, 스크린샷 위치 명시
-- 심각도 Critical인 버그는 별도 섹션으로 분리하여 최상단에 표시
-- Playwright 자동화 테스트 코드 제공 가능 시 함께 제공
-
-## 제약
-- 테스트 완료 전 배포 승인 금지
-- 미해결 Critical 버그가 있으면 배포 단계 차단
-```
-
----
-
-### [Agent 6] 배포 & DevOps 엔지니어 *(신규)*
-
-- **역할:** CI/CD 파이프라인 구성, 환경 변수 관리, 배포 자동화, 모니터링 설정
-- **주요 스킬:** Vercel/Fly.io 배포, GitHub Actions, Docker, 도메인·SSL 설정, NAS 배포
-
-**System Prompt:**
-
-```
-너는 서비스 안정적 운영을 책임지는 DevOps 엔지니어야.
-기본 배포 환경: Vercel (정적/SSR) 또는 Fly.io (Docker), 자체 NAS(Synology DS1821+) 선택 가능
-
-## 역할
-1. 프로젝트 스택에 맞는 배포 파이프라인을 단계별 체크리스트로 제공해.
-2. 아래 설정 파일을 완성형 코드로 제공해:
-   - Dockerfile (Next.js standalone 기준)
-   - GitHub Actions 워크플로우 (.github/workflows/deploy.yml)
-   - 환경변수 목록 (.env.example)
-3. 도메인 연결, SSL 인증서, CDN 설정 가이드를 제공해.
-
-## 출력 기준
-- 즉시 사용 가능한 완성 설정 파일 제공
-- 배포 전 체크리스트 반드시 포함
-- 롤백 방법을 항상 함께 제공
-
-## 제약
-- 프로덕션 배포 전 QA 통과 여부 확인 필수
-- 시크릿/API 키는 코드에 하드코딩 금지, GitHub Secrets 또는 Vercel Environment Variables 사용
-- NAS 배포 시 `/Users/coolk/.claude/nas-hosting-guide.md` 가이드 준수
-```
-
----
-
-## 3. 업무 파이프라인 (에이전트 협업 워크플로우)
+## 3. 파이프라인
 
 ### 전체 흐름
 
 ```
-[클라이언트 요구사항 입력]
+[/webstart 프로젝트명 스택]
          |
-    [Agent 1: PM]
-  타겟 분석 + 사이트맵 + 견적서
+    [/pm]  ← client-brief.md 작성 후 실행
+  페르소나·사이트맵·견적서 → _agency/sitemap.md
          |
-    [Agent 2: 디자이너]
-  와이어프레임 + 디자인 시스템
+    [/design]  ← PM 완료 게이트
+  디자인 시스템 → _agency/design-system.md
          |
-    ┌────┴────┐  ← 병렬 진행
-[Agent 3: FE] [Agent 4: BE]
-  UI 코드      DB + API
+    [/contract]  ← Design 완료 게이트
+  API 계약·ERD·공유타입 → _agency/contract.md
+         |
+    ┌────┴────┐  ← 병렬 (Contract 완료 후에만 허용)
+  [/fe]     [/be]
+  UI 코드   API + DB
     └────┬────┘
          |
-    [Agent 5: QA]
-  기능 테스트 + 버그 리포트
+    [/qa-check]  ← FE + BE 완료 게이트
+  체크리스트·버그리포트 → _agency/qa-report.md
          |
-  버그 수정 (FE/BE 담당)
+  Critical 버그 있으면 → /fe 또는 /be 수정 → /qa-check 재실행
          |
-    [Agent 6: DevOps]
-  CI/CD + 배포 + 모니터링
+    [/devops]  ← QA 완료 게이트
+  배포 설정 + 납품 문서 → _agency/handover.md
          |
     [클라이언트 납품]
 ```
 
-### 단계별 체크리스트
+### 파이프라인 상태 추적
 
-| 단계 | 에이전트 | 작업 내용 | 산출물 | 완료 조건 |
-|------|---------|----------|--------|----------|
-| Step 1 | PM | 클라이언트 요구사항 분석 | 페르소나, 사이트맵, 기능 목록, 견적서 | 클라이언트 승인 |
-| Step 2 | 디자이너 | 화면 설계 + 디자인 시스템 정의 | 와이어프레임 텍스트, 디자인 시스템 표 | FE 개발자 확인 |
-| Step 3a | 프론트엔드 | 컴포넌트 및 페이지 코드 작성 | 완성 UI 코드 | 로컬 정상 동작 |
-| Step 3b | 백엔드 | DB 스키마 + API 설계 및 구현 | ERD, API 명세서, 구현 코드 | API 통신 확인 |
-| Step 4 | QA | 전체 기능 테스트 + 버그 리포트 | QA 리포트, 버그 목록 | Critical 버그 0개 |
-| Step 5 | FE/BE | 버그 수정 | 수정 코드 | QA 재검증 통과 |
-| Step 6 | DevOps | 배포 파이프라인 + 도메인 설정 | 배포 완료, 모니터링 설정 | 프로덕션 정상 확인 |
+모든 스킬은 `_agency/status.md`를 읽고 씁니다.
+
+```markdown
+# 파이프라인 상태
+
+| 단계 | 스킬 | 상태 | 완료일 |
+|------|------|------|--------|
+| 1. 기획 | /pm | ✅ 완료 | 2026-04-02 |
+| 2. 디자인 | /design | ⏳ 대기 | - |
+| 3. API 계약 | /contract | ⏳ 대기 | - |
+| 4a. 프론트엔드 | /fe | ⏳ 대기 | - |
+| 4b. 백엔드 | /be | ⏳ 대기 | - |
+| 5. QA | /qa-check | ⏳ 대기 | - |
+| 6. 배포 | /devops | ⏳ 대기 | - |
+```
+
+### 범위 변경 규칙 (Scope Change)
+
+개발 중 요구사항이 변경되면:
+
+1. **범위 변경 발견** → `/pm`에 변경 내용 전달하여 재승인
+2. **Design 영향** → `/design` 재실행하여 디자인 시스템 갱신
+3. **API 영향** → `/contract` 재실행하여 계약 갱신, FE/BE에 공지
+4. **status.md의 범위 변경 이력**에 날짜·내용·영향 단계 기록
 
 ---
 
-## 4. 에이전트 사용 방법 (실행 환경)
+## 4. 프로젝트 폴더 구조
 
-### 옵션 A: Claude.ai Projects (권장 - 현재 즉시 사용 가능)
-
-각 에이전트를 Claude.ai의 **별도 Project**로 생성하고, 위의 System Prompt를 Project Instructions에 등록.
-
-| Project 이름 | System Prompt 등록 | 파일 첨부 |
-|-------------|-------------------|---------|
-| `[PM] 기획·마케팅` | Agent 1 프롬프트 | 클라이언트 브리프 템플릿 |
-| `[Design] UX/UI` | Agent 2 프롬프트 | 디자인 시스템 템플릿 |
-| `[FE] 프론트엔드` | Agent 3 프롬프트 | 현재 프로젝트 코드 |
-| `[BE] 백엔드` | Agent 4 프롬프트 | DB 스키마, API 명세 |
-| `[QA] 테스트` | Agent 5 프롬프트 | QA 체크리스트 템플릿 |
-| `[DevOps] 배포` | Agent 6 프롬프트 | nas-hosting-guide.md |
-
-### 옵션 B: Claude Code + CLAUDE.md (개발 작업에 최적)
-
-각 프로젝트 폴더에 에이전트별 `CLAUDE.md` 파일을 생성하여 Claude Code에서 컨텍스트 자동 로딩.
+`/webstart` 실행 시 생성되는 구조:
 
 ```
-WebStart/
-├── CLAUDE.md              ← 이 프로젝트 전역 규칙
-├── [client-project]/
-│   ├── CLAUDE.md          ← FE + BE 에이전트 규칙 적용
-│   ├── research.md        ← 구현 전 분석 (Agent 3/4)
-│   ├── plan.md            ← 구현 계획 (Agent 3/4)
-│   └── qa-report.md       ← QA 리포트 (Agent 5)
-```
-
-### 옵션 C: 하이브리드 (권장 워크플로우)
-
-| 작업 단계 | 사용 도구 |
-|----------|---------|
-| 기획·마케팅·디자인 | Claude.ai Projects (대화형) |
-| 코드 작성·디버깅 | Claude Code (파일 직접 편집) |
-| QA·배포 | Claude Code + 터미널 명령 |
-
----
-
-## 5. 클라이언트 프로젝트 시작 템플릿
-
-새 프로젝트 시작 시 PM 에이전트에게 아래 형식으로 입력:
-
-```
-## 클라이언트 브리프
-
-**업종:** [예: 인테리어 디자인 스튜디오]
-**목표:** [예: 포트폴리오 전시 + 상담 문의 증가]
-**타겟 고객:** [예: 30~40대 강남권 거주 신혼부부]
-**예산 범위:** [예: 200~300만원]
-**희망 완성일:** [예: 4주 이내]
-**필수 기능:** [예: 포트폴리오 갤러리, 문의 폼, 블로그]
-**참고 사이트:** [URL 1~3개]
-**보유 자료:** [로고 O/X, 사진 O/X, 카피 O/X]
+{project-name}/
+├── CLAUDE.md                   ← 스택별 에이전트 규칙 (단일 원본: _agency/)
+├── _agency/
+│   ├── client-brief.md         ← 사용자 작성 (입력)
+│   ├── status.md               ← 파이프라인 진행 상태 (자동 관리)
+│   ├── sitemap.md              ← /pm 산출물
+│   ├── design-system.md        ← /design 산출물
+│   ├── contract.md             ← /contract 산출물 (FE/BE 공통 계약)
+│   ├── api-spec.md             ← /be 산출물 (실제 구현 기준)
+│   ├── qa-report.md            ← /qa-check 산출물
+│   └── handover.md             ← /devops 산출물 (납품 문서)
+├── research.md                 ← /fe, /be 구현 전 분석
+└── plan.md                     ← /fe, /be 구현 계획 (체크리스트)
 ```
 
 ---
 
-## 6. 검토 요청 사항
+## 5. 스킬 상세
 
-아래 항목에 대해 승인 전 확인 부탁드립니다:
+### /webstart
 
-- [ ] **에이전트 수 (6개)**: QA, DevOps 추가가 적절한지 확인
-- [ ] **기본 기술 스택**: Next.js + Supabase + Vercel 조합이 맞는지, 선호 스택 변경 필요 여부
-- [ ] **Claude.ai 플랜**: Project 생성 기능이 사용 중인 플랜에서 가능한지 확인
-- [ ] **파이프라인 병렬 처리**: FE/BE 병렬 진행 방식이 실제 작업 흐름과 맞는지 확인
-- [ ] **결제 모듈**: 토스페이먼츠 기본 적용이 맞는지 확인
-- [ ] **추가 필요 항목**: 콘텐츠 작성(카피라이팅) 전담 에이전트 별도 분리 필요 여부
+- **역할:** 프로젝트 초기 세팅
+- **인수:** `프로젝트명 스택(nextjs|php)`
+- **생성물:** 위의 전체 폴더 구조
+- **스택 분기:** CLAUDE.md 내용이 nextjs / php에 따라 다르게 생성
+
+### /pm
+
+- **역할:** 클라이언트 요구사항 분석, 사이트맵, 페르소나, 세일즈 카피, 견적서
+- **게이트:** 없음 (첫 단계)
+- **입력 없음 시:** 작업 중단 + client-brief.md 작성 안내
+
+### /design
+
+- **역할:** 와이어프레임, 디자인 시스템 (컬러/타이포/컴포넌트), 다크모드
+- **게이트:** PM 완료
+- **스택 인식:** CLAUDE.md 읽어 nextjs면 shadcn/ui 기준, php면 Tailwind 기준
+
+### /contract *(v2.0 신규)*
+
+- **역할:** FE/BE 병렬 개발 전 공통 계약 확정
+- **게이트:** Design 완료
+- **산출물:** ERD, API 엔드포인트, 공유 타입, 에러 코드, Out of Scope 목록
+- **중요:** 이 단계 완료 전까지 /fe, /be 실행 차단
+
+### /fe
+
+- **역할:** 반응형 UI 코드 작성
+- **게이트:** Contract 완료
+- **스택 분기:**
+  - nextjs: App Router, next/image, next/link, TypeScript
+  - php: Laravel Blade / Alpine.js, Tailwind CSS
+- **산출물 자동 저장:** research.md, plan.md 자동 관리
+
+### /be
+
+- **역할:** DB 스키마, API 구현, 인증/보안
+- **게이트:** Contract 완료
+- **스택 분기:**
+  - nextjs: Supabase + API Routes + zod
+  - php: Laravel + Eloquent + Form Request
+- **산출물 자동 저장:** api-spec.md 갱신
+
+### /qa-check
+
+- **역할:** 기능/성능/접근성/보안 체크리스트 + 버그 리포트
+- **게이트:** FE + BE 모두 완료
+- **배포 승인 조건:** Critical 버그 0개
+- **참고:** 실제 브라우저 자동 테스트는 별도로 `/qa` 스킬 사용 가능
+
+### /devops
+
+- **역할:** 배포 파이프라인, Dockerfile, GitHub Actions, 도메인/SSL, 납품 문서
+- **게이트:** QA 완료
+- **스택 분기:**
+  - nextjs+Vercel: vercel.json + 환경변수 목록
+  - nextjs+Fly.io/NAS: Dockerfile (standalone, 상대경로) + GitHub Actions
+  - php: Dockerfile (PHP-FPM+Nginx) + GitHub Actions + 마이그레이션
 
 ---
 
-## 7. /webstart 슬래시 커맨드 (자동 세팅)
+## 6. 설치 방법
 
-승인 후 생성된 Claude Code 스킬. 어떤 프로젝트 폴더에서도 아래 명령으로 에이전트 시스템 전체를 자동 세팅합니다.
+### 현재 컴퓨터
 
-### 사용법
+이미 설치되어 있음.
+
+### 새 컴퓨터
 
 ```bash
-# Next.js 스택 (기본)
-/webstart kim-interior nextjs
-
-# PHP 스택
-/webstart park-restaurant php
-
-# 인수 없이 실행하면 대화형으로 입력 안내
-/webstart
+git clone https://github.com/본인계정/webstart-agency.git
+cd webstart-agency
+bash install.sh
 ```
 
-### 자동 생성되는 항목
+`install.sh`가 `skills/` 폴더의 모든 스킬을 `~/.claude/skills/`에 자동 복사합니다.
 
-| 생성 파일 | 용도 |
-|----------|------|
-| `{project}/CLAUDE.md` | 선택 스택 기준 에이전트 전역 규칙 |
-| `{project}/_agency/client-brief.md` | 클라이언트 정보 입력 템플릿 |
-| `{project}/_agency/sitemap.md` | PM 산출물 저장 공간 |
-| `{project}/_agency/design-system.md` | 디자이너 산출물 저장 공간 |
-| `{project}/_agency/api-spec.md` | 백엔드 산출물 저장 공간 |
-| `{project}/_agency/qa-report.md` | QA 산출물 저장 공간 |
-| `{project}/research.md` | 구현 전 분석 파일 |
-| `{project}/plan.md` | 구현 계획 파일 |
-
-### 세팅 후 첫 실행 순서
-
-```
-1. _agency/client-brief.md 에 클라이언트 정보 입력
-2. "@pm _agency/client-brief.md 내용으로 기획안 작성해" 입력
-3. 이후 파이프라인 순서대로 @design → @fe/@be → @qa → @devops 진행
+설치 확인:
+```bash
+# Claude Code 재시작 후 /webstart 입력 시 동작하면 성공
 ```
 
 ---
 
-*승인 후 각 에이전트별 CLAUDE.md 파일 및 Claude.ai Project 설정 파일을 생성합니다.*
+## 7. 사용 흐름 요약
+
+```
+1. 새 프로젝트 시작
+   /webstart kim-interior nextjs
+
+2. client-brief.md 작성 후
+   /pm
+
+3. /design
+
+4. /contract
+
+5. (병렬)
+   /fe Hero섹션     /be 문의폼 API
+
+6. /qa-check
+
+7. /devops
+```
+
+---
+
+## 8. v1.0 → v2.0 주요 변경 사항
+
+| 항목 | v1.0 | v2.0 |
+|------|------|------|
+| 에이전트 구조 | CLAUDE.md @mode 전환 | 독립 스킬 8개 |
+| 파이프라인 게이트 | 선언적 (강제 불가) | status.md 자동 검증 |
+| FE/BE 병렬 조건 | Design 완료 후 | Contract 완료 후 |
+| PHP 지원 | 텍스트만 변경 | 에이전트 행동 분기 |
+| 산출물 저장 | 수동 | 각 스킬이 자동 저장 |
+| 범위 변경 규칙 | 없음 | PM 재승인 → 계약 갱신 |
+| 납품 문서 | 없음 | /devops가 handover.md 생성 |
+| QA 기준 | Critical 버그 0개 | 기능+성능+a11y+보안+배포준비 체크리스트 |
