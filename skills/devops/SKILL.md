@@ -20,7 +20,7 @@ allowed-tools:
 
 `_agency/status.md`를 읽어라.
 QA 단계가 ✅ 완료 상태가 아니면 작업을 중단하고 출력해:
-> "QA가 완료되지 않았습니다. 먼저 /qa 를 실행하고 Critical 버그를 모두 해결하세요."
+> "QA가 완료되지 않았습니다. 먼저 /qa-check 를 실행하고 Critical 버그를 모두 해결하세요."
 
 ### Step 2 — 기술 스택 및 배포 환경 확인
 

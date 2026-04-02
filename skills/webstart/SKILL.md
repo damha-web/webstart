@@ -39,11 +39,14 @@ args에서 프로젝트 이름과 스택을 파싱합니다.
 {project-name}/
 ├── CLAUDE.md                  ← 프로젝트 전역 에이전트 규칙
 ├── _agency/
-│   ├── client-brief.md        ← 클라이언트 브리프 입력 템플릿
-│   ├── sitemap.md             ← PM 에이전트 산출물
-│   ├── design-system.md       ← 디자이너 에이전트 산출물
-│   ├── api-spec.md            ← 백엔드 에이전트 산출물
-│   └── qa-report.md           ← QA 에이전트 산출물
+│   ├── client-brief.md        ← 클라이언트 브리프 입력 템플릿 (webstart 생성)
+│   ├── status.md              ← 파이프라인 진행 상태 (/pm 최초 생성, 각 스킬 업데이트)
+│   ├── sitemap.md             ← /pm 산출물
+│   ├── design-system.md       ← /design 산출물
+│   ├── contract.md            ← /contract 산출물
+│   ├── api-spec.md            ← /be 산출물
+│   ├── qa-report.md           ← /qa-check 산출물
+│   └── handover.md            ← /devops 납품 문서
 ├── research.md                ← 구현 전 분석 (FE/BE 공용)
 └── plan.md                    ← 구현 계획 (FE/BE 공용)
 ```
@@ -75,39 +78,44 @@ args에서 프로젝트 이름과 스택을 파싱합니다.
 
 ## 에이전트 역할 가이드
 
-### PM 모드 (@pm)
+### PM (/pm)
 클라이언트 요구사항 분석, 사이트맵, 페르소나, 견적서 작성.
 산출물은 _agency/sitemap.md에 저장.
 
-### 디자이너 모드 (@design)
+### 디자이너 (/design)
 와이어프레임, 디자인 시스템(컬러·타이포·컴포넌트) 정의.
 산출물은 _agency/design-system.md에 저장.
 
-### 프론트엔드 모드 (@fe)
+### Contract (/contract)
+FE/BE 병렬 개발 전 API 엔드포인트, ERD, 공유 타입 확정.
+산출물은 _agency/contract.md에 저장.
+
+### 프론트엔드 (/fe)
 디자인 시스템 기반 반응형 UI 컴포넌트 작성.
 구현 전 research.md → plan.md 순서로 작성 후 진행.
 모바일 first (sm → md → lg), Lighthouse 90+ 목표.
 
-### 백엔드 모드 (@be)
+### 백엔드 (/be)
 ERD 설계, API 명세서 작성, Supabase RLS 설정.
 산출물은 _agency/api-spec.md에 저장.
 모든 입력값 zod로 서버사이드 validation.
 
-### QA 모드 (@qa)
+### QA (/qa-check)
 기능 테스트 시나리오 작성, QA 리포트 생성.
 산출물은 _agency/qa-report.md에 저장.
 Critical 버그 0개 달성 전 배포 금지.
 
-### DevOps 모드 (@devops)
+### DevOps (/devops)
 Dockerfile, GitHub Actions 워크플로우, 환경변수 목록 제공.
 NAS 배포 시 ~/.claude/nas-hosting-guide.md 준수.
 
 ## 파이프라인 순서
-1. @pm → 기획·견적 → 클라이언트 승인
-2. @design → 디자인 시스템
-3. @fe + @be 병렬 진행
-4. @qa → QA 리포트 → 버그 수정
-5. @devops → 배포
+1. /pm → 기획·견적 → 클라이언트 승인
+2. /design → 디자인 시스템
+3. /contract → API 계약 확정
+4. /fe + /be 병렬 진행
+5. /qa-check → QA 리포트 → 버그 수정
+6. /devops → 배포
 ```
 
 **php 스택 CLAUDE.md 내용 (php 선택 시):**
@@ -131,7 +139,7 @@ NAS 배포 시 ~/.claude/nas-hosting-guide.md 준수.
 ```markdown
 # 클라이언트 브리프
 
-> 이 파일을 채운 뒤 @pm 에게 전달하세요.
+> 이 파일을 채운 뒤 /pm 을 실행하세요.
 
 ## 기본 정보
 - **업종:** 
@@ -150,6 +158,7 @@ NAS 배포 시 ~/.claude/nas-hosting-guide.md 준수.
 ## 예산 및 일정
 - **예산 범위:** 
 - **희망 완성일:** 
+- **시간당 단가:** (예: 50,000원)
 
 ## 필수 기능 (해당 항목에 체크)
 - [ ] 메인 홈페이지
@@ -180,6 +189,9 @@ NAS 배포 시 ~/.claude/nas-hosting-guide.md 준수.
 | 다음 단계 | 명령 |
 |----------|------|
 | 1. 클라이언트 정보 입력 | `_agency/client-brief.md` 파일을 편집 |
-| 2. PM 에이전트 실행 | `@pm _agency/client-brief.md 내용을 바탕으로 기획안 작성해` |
-| 3. 디자이너 실행 | `@design 기획안 기반 디자인 시스템 만들어` |
-| 4. 개발 시작 | `@fe` 또는 `@be` 로 각 모드 전환 |
+| 2. PM 기획 | `/pm` |
+| 3. 디자인 시스템 | `/design` |
+| 4. API 계약 확정 | `/contract` |
+| 5. 개발 시작 | `/fe` 또는 `/be` (병렬 가능) |
+| 6. QA | `/qa-check` |
+| 7. 배포 | `/devops` |

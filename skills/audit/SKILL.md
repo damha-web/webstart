@@ -30,6 +30,7 @@ args에서 URL 또는 데이터 폴더 경로를 파싱한다.
 
 **옵션 처리:**
 - `--step=ux|ia|tech|db` → 해당 단계만 실행 (Step 1~4 중 택1)
+- `--step=report` → Step 5~6만 실행 (종합 보고서 + 제작팀 인계)
 - `--full` → Step 1~6 전체 순차 실행
 - 옵션 없이 URL만 → Step 0만 실행 후 안내
 
@@ -55,11 +56,19 @@ args에서 URL 또는 데이터 폴더 경로를 파싱한다.
 (분석 시 참고할 사항)
 ```
 
-URL이 제공된 경우 Bash로 아래 Playwright 스크립트를 실행하여 기본 데이터를 자동 수집한다:
+URL이 제공된 경우 Bash로 아래 순서로 실행하여 기본 데이터를 자동 수집한다:
+
+먼저 `_audit/` 폴더에서 playwright 로컬 패키지를 확인하고 없으면 설치한다:
 
 ```bash
-npx playwright test --config=/dev/null -e "
-const { chromium } = require('playwright');
+cd _audit && [ -d node_modules/playwright ] || npm install playwright --save && npx playwright install chromium --with-deps 2>/dev/null; cd ..
+```
+
+이후 수집 스크립트를 실행한다:
+
+```bash
+node -e "
+const { chromium } = require('./_audit/node_modules/playwright');
 (async () => {
   const browser = await chromium.launch();
   const page = await browser.newPage();
@@ -102,7 +111,6 @@ const { chromium } = require('playwright');
 "
 ```
 
-> Playwright가 설치되지 않았으면 `npx playwright install chromium`을 먼저 실행한다.
 > 스크립트 실행이 실패하면 사용자에게 수동 입력을 안내한다.
 
 수집 결과를 `_audit/scraped-data.json`에 저장한다.

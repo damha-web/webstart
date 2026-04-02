@@ -39,7 +39,7 @@ Bash로 Playwright를 실행하여 기술 정보를 수집한다:
 
 ```bash
 node -e "
-const { chromium } = require('playwright');
+const { chromium } = require('./_audit/node_modules/playwright');
 (async () => {
   const browser = await chromium.launch();
   const page = await browser.newPage();

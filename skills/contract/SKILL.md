@@ -23,13 +23,18 @@ allowed-tools:
 Design 단계가 ✅ 완료 상태가 아니면 작업을 중단하고 출력해:
 > "디자인 시스템이 완료되지 않았습니다. 먼저 /design 을 실행하세요."
 
-### Step 2 — 입력 읽기
+### Step 2 — 기술 스택 확인
+
+`CLAUDE.md`를 읽어 `## 기술 스택` 섹션을 확인해.
+이후 Step 3의 항목 3(타입 정의)을 스택에 맞게 작성한다.
+
+### Step 3 — 입력 읽기
 
 두 파일을 모두 읽어라:
 - `_agency/sitemap.md` (기능 목록, 페르소나)
 - `_agency/design-system.md` (화면 구조, 컴포넌트 목록)
 
-### Step 3 — 계약 문서 작성
+### Step 4 — 계약 문서 작성
 
 아래 항목을 모두 작성해:
 
@@ -48,12 +53,25 @@ Design 단계가 ✅ 완료 상태가 아니면 작업을 중단하고 출력해
 |--------|----------|------|----------|--------------|----------|
 | GET | /api/... | | Y/N | | |
 
-**3. 공유 타입 정의 (TypeScript)**
+**3. 공유 타입 정의**
 
-FE와 BE가 동일하게 사용할 타입을 코드로 작성:
+**Next.js 스택이면** TypeScript 타입으로 작성:
 ```typescript
 // types/shared.ts
 export type ...
+```
+
+**PHP 스택이면** OpenAPI 스펙(YAML)으로 작성:
+```yaml
+# openapi-types.yaml
+components:
+  schemas:
+    EntityName:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
 ```
 
 **4. 상태 코드 및 에러 형식**
@@ -70,23 +88,29 @@ export type ...
 에러 코드 목록 표로 정리.
 
 **5. 인증 플로우**
-- 인증 방식 (Supabase Auth / 세션 / JWT)
+
+**Next.js 스택이면:**
+- 인증 방식: Supabase Auth
 - 토큰 갱신 규칙
 - 미인증 접근 허용 엔드포인트 목록
+
+**PHP 스택이면:**
+- 인증 방식: Laravel Sanctum (API 토큰) 또는 Breeze (세션)
+- 미인증 접근 허용 라우트 목록 (routes/api.php 기준)
 
 **6. 범위 밖 기능 (Out of Scope)**
 이번 프로젝트에서 구현하지 않는 기능을 명시해.
 범위 변경이 생기면 /pm 재승인 후 이 문서를 갱신해야 함.
 
-### Step 4 — 산출물 저장
+### Step 5 — 산출물 저장
 
 작성한 내용 전체를 `_agency/contract.md`에 저장해.
 
-### Step 5 — 상태 업데이트
+### Step 6 — 상태 업데이트
 
 `_agency/status.md`에서 Contract 단계를 ✅ 완료로 업데이트해.
 
-### Step 6 — 완료 메시지
+### Step 7 — 완료 메시지
 
 ```
 ✅ Contract Freeze 완료

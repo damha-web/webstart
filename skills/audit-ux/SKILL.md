@@ -39,7 +39,7 @@ URL이 있고 scraped-data.json이 없으면 Bash로 직접 Playwright를 실행
 
 ```bash
 node -e "
-const { chromium } = require('playwright');
+const { chromium } = require('./_audit/node_modules/playwright');
 (async () => {
   const browser = await chromium.launch();
   const page = await browser.newPage();
