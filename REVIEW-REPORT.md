@@ -3,6 +3,8 @@
 > 검토일: 2026-04-02
 > 검토 범위: SETUP-GUIDE.md + skills/ 13개 스킬 파일 전체
 > 작성: Claude Code (simplify 스킬)
+> 2026-04-03 업데이트: 이 문서는 1차 검토 기록입니다.
+> 현재 남은 이슈 판단과 우선순위는 [REVIEW-REPORT-V2.md](./REVIEW-REPORT-V2.md)를 기준으로 보세요.
 
 ---
 
