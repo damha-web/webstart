@@ -60,7 +60,18 @@ runtime은 `_audit/raw/tech-scan.json`과 `_audit/derived/tech-summary.json`을 
 
 ### Step 5 — 성능 진단
 
-**로딩 성능**
+**Lighthouse 점수** (runtime이 자동 측정, npx 없으면 생략)
+
+| 카테고리 | 점수 | 판정 |
+|---------|------|------|
+| Performance | ... | 양호(90+)/보통(50~89)/미달(<50) |
+| Accessibility | ... | ... |
+| Best Practices | ... | ... |
+| SEO | ... | ... |
+
+> `_audit/raw/lighthouse.json`에 전체 보고서 저장됨. 점수는 `_audit/derived/tech-summary.json`의 `lighthouse` 키 참조.
+
+**로딩 성능** (Navigation Timing + Core Web Vitals)
 
 | 지표 | 측정값 | 기준 | 판정 | 상태 |
 |------|--------|------|------|------|

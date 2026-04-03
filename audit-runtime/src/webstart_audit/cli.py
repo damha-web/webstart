@@ -53,6 +53,7 @@ class PageSnapshot(BaseModel):
     meta: dict[str, Any]
     performance: dict[str, Any]
     screenshot: str | None = None
+    screenshot_mobile: str | None = None
 
 
 def ensure_audit_dirs(project_dir: Path) -> dict[str, Path]:
@@ -583,10 +584,14 @@ def crawl(
     errors: list[dict[str, str]] = []
     robots_blocked: list[str] = []
     aggregate_color_counter: Counter[str] = Counter()
+    screenshot_count = 0
+
+    PC_VIEWPORT = {"width": 1920, "height": 1080}
+    MOBILE_VIEWPORT = {"width": 375, "height": 812}
 
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
-        page = browser.new_page()
+        page = browser.new_page(viewport=PC_VIEWPORT)
 
         while queue and len(visited) < max_pages:
             current_url, depth = queue.popleft()
@@ -600,9 +605,20 @@ def crawl(
             try:
                 response = page.goto(current_url, wait_until="networkidle", timeout=30000)
                 snapshot = collect_page_snapshot(page, current_url=current_url, depth=depth)
-                screenshot_name = f"{len(pages)+1:03d}-{slugify_url(current_url)}.png"
+                slug = slugify_url(current_url)
+                page_num = f"{len(pages)+1:03d}"
+                screenshot_name = f"{page_num}-{slug}-pc.png"
                 screenshot_path = paths["screenshots"] / screenshot_name
                 page.screenshot(path=str(screenshot_path), full_page=True)
+                screenshot_count += 1
+
+                page.set_viewport_size(MOBILE_VIEWPORT)
+                page.wait_for_timeout(500)
+                mobile_screenshot_name = f"{page_num}-{slug}-mobile.png"
+                mobile_screenshot_path = paths["screenshots"] / mobile_screenshot_name
+                page.screenshot(path=str(mobile_screenshot_path), full_page=True)
+                screenshot_count += 1
+                page.set_viewport_size(PC_VIEWPORT)
 
                 performance = page.evaluate(
                     """
@@ -634,6 +650,7 @@ def crawl(
                     meta=snapshot["meta"],
                     performance=performance,
                     screenshot=f"_audit/screenshots/{screenshot_name}",
+                    screenshot_mobile=f"_audit/screenshots/{mobile_screenshot_name}",
                 )
                 pages.append(page_snapshot.model_dump())
                 visited.add(current_url)
@@ -693,7 +710,7 @@ def crawl(
             "visitedPages": len(pages),
             "uniqueScripts": len(unique_scripts),
             "uniqueStyles": len(unique_styles),
-            "capturedScreenshots": len(pages),
+            "capturedScreenshots": screenshot_count,
             "robotsBlockedPages": len(robots_blocked),
         },
     }
@@ -715,6 +732,7 @@ def crawl(
                 "depth": page_data["depth"],
                 "status": page_data["status"],
                 "screenshot": page_data["screenshot"],
+                "screenshot_mobile": page_data.get("screenshot_mobile"),
             }
             for page_data in pages
         ],
@@ -814,12 +832,29 @@ def ux_scan(
             }
         )
 
+    image_palette: dict[str, list[int] | list[list[int]]] | None = None
+    if screenshot_samples:
+        first_screenshot = resolved / screenshot_samples[0]
+        if first_screenshot.exists():
+            try:
+                from colorthief import ColorThief
+
+                ct = ColorThief(str(first_screenshot))
+                dominant = list(ct.get_color(quality=1))
+                top_colors_img = [list(c) for c in ct.get_palette(color_count=6, quality=1)]
+                image_palette = {"dominant": dominant, "palette": top_colors_img}
+            except ImportError:
+                console.print("[yellow]colorthief 패키지가 없어 이미지 팔레트를 건너뜁니다.[/yellow]")
+            except Exception as exc:
+                console.print(f"[yellow]이미지 팔레트 추출 실패: {exc}[/yellow]")
+
     summary = {
         "siteName": read_target_name(resolved),
         "url": read_target_url(resolved),
         "generatedAt": datetime.now().isoformat(timespec="seconds"),
         "pageCount": len(pages),
         "palette": palette,
+        "imagePalette": image_palette,
         "typography": top_fonts,
         "components": {
             "navigationPages": page_with_nav,
@@ -909,6 +944,56 @@ def ia_scan(
         artifacts=["_audit/derived/ia-summary.json"],
     )
     console.print(f"ia summary saved: {paths['derived'] / 'ia-summary.json'}")
+
+
+def run_lighthouse(target_url: str, paths: dict[str, Path]) -> dict[str, float] | None:
+    """npx lighthouse를 실행하여 카테고리 점수를 반환한다. 실패 시 None."""
+    import shutil
+    import subprocess
+
+    if not shutil.which("npx"):
+        console.print("[yellow]npx를 찾을 수 없어 Lighthouse를 건너뜁니다.[/yellow]")
+        return None
+
+    try:
+        result = subprocess.run(
+            [
+                "npx", "lighthouse", target_url,
+                "--output=json",
+                "--chrome-flags=--headless --no-sandbox",
+                "--quiet",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        console.print("[yellow]Lighthouse 실행 시간 초과 (120초). 건너뜁니다.[/yellow]")
+        return None
+    except FileNotFoundError:
+        console.print("[yellow]npx 실행에 실패했습니다. Lighthouse를 건너뜁니다.[/yellow]")
+        return None
+
+    if result.returncode != 0:
+        console.print(f"[yellow]Lighthouse 종료 코드 {result.returncode}. 건너뜁니다.[/yellow]")
+        return None
+
+    try:
+        report = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        console.print("[yellow]Lighthouse 출력을 파싱할 수 없습니다. 건너뜁니다.[/yellow]")
+        return None
+
+    categories = report.get("categories", {})
+    scores: dict[str, float] = {}
+    for key in ("performance", "accessibility", "best-practices", "seo"):
+        cat = categories.get(key)
+        if cat and cat.get("score") is not None:
+            scores[key] = round(cat["score"] * 100, 1)
+
+    write_json(paths["raw"] / "lighthouse.json", report)
+    console.print(f"lighthouse saved: {paths['raw'] / 'lighthouse.json'}")
+    return scores
 
 
 @app.command("tech-scan")
@@ -1065,6 +1150,9 @@ def tech_scan(
         (item for item in requests if item["type"] == "document" and same_origin(item["url"], origin)),
         None,
     )
+    paths = ensure_audit_dirs(resolved)
+    lighthouse_scores = run_lighthouse(normalized_url, paths)
+
     summary = {
         "frameworks": frameworks,
         "pageResults": page_results,
@@ -1072,17 +1160,22 @@ def tech_scan(
         "thirdParty": third_party,
         "serverHeaders": main_document["headers"] if main_document else {},
         "totalRequests": len(requests),
+        "lighthouse": lighthouse_scores,
     }
 
-    paths = ensure_audit_dirs(resolved)
     write_json(paths["raw"] / "tech-scan.json", {"requests": requests, **summary})
     write_json(paths["derived"] / "tech-summary.json", summary)
+
+    artifacts = ["_audit/raw/tech-scan.json", "_audit/derived/tech-summary.json"]
+    if lighthouse_scores:
+        artifacts.append("_audit/raw/lighthouse.json")
+
     mark_stage(
         resolved,
         "tech",
         status="done",
         notes=f"{len(page_results)}개 페이지 기술 스캔",
-        artifacts=["_audit/raw/tech-scan.json", "_audit/derived/tech-summary.json"],
+        artifacts=artifacts,
     )
     console.print(f"tech scan saved: {paths['raw'] / 'tech-scan.json'}")
 
