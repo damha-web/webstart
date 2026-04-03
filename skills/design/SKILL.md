@@ -32,6 +32,10 @@ allowed-tools:
 ### Step 3 — 현재 프로젝트의 기술 스택 확인
 
 `CLAUDE.md`를 읽어 `## 기술 스택` 섹션을 확인해.
+`CLAUDE.md`가 없으면 작업을 중단하고 아래 메시지를 출력해:
+> "프로젝트 규칙 파일이 없습니다. 먼저 /webstart 를 실행하세요."
+
+`## 기술 스택` 섹션이 없으면 AskUserQuestion으로 `nextjs` / `php` 중 어떤 스택인지 확인한 뒤 진행해.
 - Next.js 스택이면: shadcn/ui + Tailwind CSS 변수 기준으로 디자인 시스템 작성
 - PHP 스택이면: Tailwind CSS 유틸리티 클래스 기준으로 작성
 

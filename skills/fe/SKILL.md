@@ -29,6 +29,10 @@ allowed-tools:
 ### Step 2 — 기술 스택 확인
 
 `CLAUDE.md`를 읽어 `## 기술 스택` 섹션을 확인해.
+`CLAUDE.md`가 없으면 작업을 중단하고 아래 메시지를 출력해:
+> "프로젝트 규칙 파일이 없습니다. 먼저 /webstart 를 실행하세요."
+
+`## 기술 스택` 섹션이 없으면 AskUserQuestion으로 `nextjs` / `php` 중 어떤 스택인지 확인한 뒤 진행해.
 
 **Next.js 스택이면** 아래 규칙을 적용해:
 - 프레임워크: Next.js 14 (App Router)
@@ -86,10 +90,26 @@ plan.md의 모든 항목이 `[x]`로 완료된 경우에만 `_agency/status.json
 - `stages.fe.status = "done"`
 - `stages.fe.completed_at = {오늘 날짜}`
 - `stages.fe.notes = ""`
+- `stages.qa.status = "pending"`
+- `stages.qa.completed_at = null`
+- `stages.qa.notes = ""`
+- `stages.qa.artifacts = []`
+- `stages.devops.status = "pending"`
+- `stages.devops.completed_at = null`
+- `stages.devops.notes = ""`
+- `stages.devops.artifacts = []`
 
 부분 작업이면:
 - `stages.fe.status = "partial"`
 - `stages.fe.completed_at = null`
+- `stages.qa.status = "pending"`
+- `stages.qa.completed_at = null`
+- `stages.qa.notes = ""`
+- `stages.qa.artifacts = []`
+- `stages.devops.status = "pending"`
+- `stages.devops.completed_at = null`
+- `stages.devops.notes = ""`
+- `stages.devops.artifacts = []`
 
 두 경우 모두 마지막에 `_agency/status.md`를 사람이 읽는 뷰로 다시 생성해.
 
@@ -108,6 +128,7 @@ BE 작업도 완료되었으면 다음 단계: /qa-check
 ✅ FE 작업 완료 (부분)
 수정된 파일 목록: [파일 목록]
 남은 작업: plan.md 확인
+현재 상태: _agency/status.json 의 FE = partial
 
 전체 완료 후 /qa-check 실행
 ```

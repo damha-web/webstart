@@ -187,7 +187,7 @@ NAS 배포 시 ~/.claude/nas-hosting-guide.md 준수.
 
 ```json
 {
-  "version": "2.1",
+  "version": "2.2",
   "updated_at": "-",
   "stages": {
     "pm": { "label": "PM", "status": "pending", "completed_at": null, "notes": "", "artifacts": ["_agency/sitemap.md"] },

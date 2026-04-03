@@ -123,7 +123,8 @@ runtime은 `_audit/raw/tech-scan.json`과 `_audit/derived/tech-summary.json`을 
 
 ### Step 10 — 상태 업데이트
 
-`_audit/status.md`에서 Tech 단계를 ✅ 완료로 업데이트한다.
+`webstart-audit tech-scan`이 `_audit/status.json`과 `_audit/status.md`를 자동 갱신한다.
+추가 수동 보완이 필요하면 notes를 함께 정리한다.
 
 ### Step 11 — 완료 메시지
 

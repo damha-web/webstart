@@ -7,6 +7,9 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 WEBSTART_HOME="${WEBSTART_HOME:-$HOME/.webstart}"
 SKIP_AUDIT_RUNTIME=0
+MIN_NODE_MAJOR=18
+MIN_PYTHON_MAJOR=3
+MIN_PYTHON_MINOR=10
 
 if [ "${1:-}" = "--skip-audit-runtime" ]; then
   SKIP_AUDIT_RUNTIME=1
@@ -16,11 +19,52 @@ echo ""
 echo "=== 1인 웹 에이전시 AI 시스템 설치 시작 ==="
 echo ""
 
+check_node_version() {
+  if ! command -v node &> /dev/null; then
+    echo "[오류] Node.js 가 설치되어 있지 않습니다."
+    echo "       Node.js ${MIN_NODE_MAJOR}+ 필요: https://nodejs.org"
+    exit 1
+  fi
+
+  NODE_VERSION=$(node -v 2>/dev/null | sed 's/^v//')
+  NODE_MAJOR=$(printf '%s' "$NODE_VERSION" | cut -d. -f1)
+  if [ -z "$NODE_MAJOR" ] || [ "$NODE_MAJOR" -lt "$MIN_NODE_MAJOR" ]; then
+    echo "[오류] Node.js ${MIN_NODE_MAJOR}+ 가 필요합니다. 현재: ${NODE_VERSION:-unknown}"
+    exit 1
+  fi
+}
+
+check_python_version() {
+  if ! command -v python3 &> /dev/null; then
+    echo "[오류] python3 가 설치되어 있지 않습니다."
+    echo "       Python ${MIN_PYTHON_MAJOR}.${MIN_PYTHON_MINOR}+ 필요: https://python.org"
+    exit 1
+  fi
+
+  PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")' 2>/dev/null)
+  PYTHON_MAJOR=$(printf '%s' "$PYTHON_VERSION" | cut -d. -f1)
+  PYTHON_MINOR=$(printf '%s' "$PYTHON_VERSION" | cut -d. -f2)
+  if [ -z "$PYTHON_MAJOR" ] || [ -z "$PYTHON_MINOR" ]; then
+    echo "[오류] Python 버전을 확인할 수 없습니다."
+    exit 1
+  fi
+  if [ "$PYTHON_MAJOR" -lt "$MIN_PYTHON_MAJOR" ] || { [ "$PYTHON_MAJOR" -eq "$MIN_PYTHON_MAJOR" ] && [ "$PYTHON_MINOR" -lt "$MIN_PYTHON_MINOR" ]; }; then
+    echo "[오류] Python ${MIN_PYTHON_MAJOR}.${MIN_PYTHON_MINOR}+ 가 필요합니다. 현재: ${PYTHON_VERSION}"
+    exit 1
+  fi
+}
+
+check_node_version
+
 # Claude Code 설치 여부 확인
 if ! command -v claude &> /dev/null; then
   echo "[오류] Claude Code가 설치되어 있지 않습니다."
   echo "       설치: npm install -g @anthropic-ai/claude-code"
   exit 1
+fi
+
+if [ "$SKIP_AUDIT_RUNTIME" -eq 0 ]; then
+  check_python_version
 fi
 
 SKILLS_SRC="$SCRIPT_DIR/skills"

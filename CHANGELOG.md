@@ -15,7 +15,7 @@
 
 - `SETUP-GUIDE.md`를 v2.2 기준으로 갱신
 - `agency-ai-agent-plan.md`를 `status.json` 기반 파이프라인 설계로 업데이트
-- 내부 검토 문서(`IMPROVEMENT-REPORT.md`, `REVIEW-REPORT.md`, `SESSION-REPORT.md`, `AUDIT-AUTOMATION-V3.md`)를 repo 내부 참고 문서로 유지
+- 내부 검토 문서(`IMPROVEMENT-REPORT.md`, `REVIEW-REPORT.md`, `REVIEW-REPORT-V2.md`, `SESSION-REPORT.md`, `AUDIT-AUTOMATION-V3.md`)를 repo 내부 참고 문서로 유지
 - `install.sh`에서 문서 lint를 자동 실행하고, runtime/skill 복사 시 캐시 파일을 제외
 
 ### 파일 변경

@@ -122,6 +122,7 @@ FE와 BE 단계는 `stages.fe.status == "done"` 그리고 `stages.be.status == "
 ✅ QA 체크 완료 — 배포 승인
 저장 위치: _agency/qa-report.md
 
+게이트 기준: FE와 BE가 모두 done 상태여야 합니다. partial 상태면 배포 승인할 수 없습니다.
 실제 브라우저 테스트가 필요하면: /qa (자동 브라우저 테스트)
 배포 진행: /devops
 ```

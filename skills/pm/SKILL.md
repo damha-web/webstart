@@ -18,6 +18,8 @@ allowed-tools:
 
 ### Step 1 — 입력 확인
 
+PM은 제작 파이프라인의 첫 단계이므로 별도 선행 게이트가 없다.
+
 `_agency/client-brief.md` 파일을 읽어라.
 파일이 없거나 내용이 비어 있으면 작업을 중단하고 아래 메시지를 출력해:
 > "_agency/client-brief.md 파일을 먼저 작성해주세요. /webstart로 프로젝트를 생성하면 템플릿이 만들어집니다."
@@ -58,7 +60,7 @@ client-brief.md 내용을 분석하여 아래 항목을 작성해:
 
 ```json
 {
-  "version": "2.1",
+  "version": "2.2",
   "updated_at": "{오늘 날짜}",
   "stages": {
     "pm": { "label": "PM", "status": "done", "completed_at": "{오늘 날짜}", "notes": "", "artifacts": ["_agency/sitemap.md"] },

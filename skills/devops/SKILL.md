@@ -28,6 +28,10 @@ allowed-tools:
 ### Step 2 — 기술 스택 및 배포 환경 확인
 
 `CLAUDE.md`를 읽어 기술 스택과 배포 환경을 확인해.
+`CLAUDE.md`가 없으면 작업을 중단하고 아래 메시지를 출력해:
+> "프로젝트 규칙 파일이 없습니다. 먼저 /webstart 를 실행하세요."
+
+`## 기술 스택` 섹션이 없으면 AskUserQuestion으로 `nextjs` / `php` 중 어떤 스택인지 확인한 뒤 진행해.
 
 배포 환경이 명시되지 않은 경우 AskUserQuestion으로 물어봐:
 1. 배포 플랫폼: Vercel / Fly.io / Synology NAS / 기타

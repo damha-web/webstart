@@ -432,6 +432,7 @@ Critical 버그가 있으면 `blocked`로 기록되고 `/devops`로 넘어가지
 |------|------|
 | `IMPROVEMENT-REPORT.md` | 개선 후보 정리 |
 | `REVIEW-REPORT.md` | 검토 결과 |
+| `REVIEW-REPORT-V2.md` | 2차 검토 결과 |
 | `SESSION-REPORT.md` | 작업 기록 |
 | `AUDIT-AUTOMATION-V3.md` | audit runtime 확장 설계 메모 |
 

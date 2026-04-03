@@ -1,9 +1,9 @@
 # 기존 웹사이트 검수 및 분석 에이전트 팀 계획서
 
-> **버전:** v1.1 (검토 보고서 반영 개정)
-> **작성일:** 2026-04-02
-> **변경 이력:** v1.0 → v1.1: 신뢰도 체계 도입, 보안 정책 추가, 인계 계약 수정(client-brief.md 자동 생성), 입력 게이트 강화, Step 0/6 추가, status.md 템플릿 정의
-> **연계 문서:** [agency-ai-agent-plan.md](./agency-ai-agent-plan.md) (제작 에이전시 시스템 v2.0)
+> **버전:** v2.2
+> **작성일:** 2026-04-03
+> **변경 이력:** v1.0 → v1.1: 신뢰도 체계 도입, 보안 정책 추가, 인계 계약 수정(client-brief.md 자동 생성), 입력 게이트 강화, Step 0/6 추가, status.md 템플릿 정의 / v1.1 → v2.2: audit runtime 연동, `_audit/status.json` 병행 관리, 제작 파이프라인 v2.2와 문서 버전 동기화
+> **연계 문서:** [agency-ai-agent-plan.md](./agency-ai-agent-plan.md) (제작 에이전시 시스템 v2.2)
 > **에이전트 번호:** Agent 5 ~ Agent 8 (기존 Agent 1~4는 제작 팀)
 
 ---

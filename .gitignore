@@ -1,3 +1,10 @@
 test-project/
 .DS_Store
 ._*
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/

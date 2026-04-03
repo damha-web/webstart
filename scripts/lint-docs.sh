@@ -57,6 +57,26 @@ for skill in "${VALID_SKILLS[@]}"; do
   fi
 done
 
+LATEST_CHANGELOG_VERSION=$(awk '/^## v[0-9]/{print $2; exit}' CHANGELOG.md 2>/dev/null || true)
+if [ -n "$LATEST_CHANGELOG_VERSION" ]; then
+  if ! grep -q "버전: ${LATEST_CHANGELOG_VERSION}" SETUP-GUIDE.md; then
+    echo "[ERROR] SETUP-GUIDE.md 버전이 CHANGELOG 최신 버전(${LATEST_CHANGELOG_VERSION})과 다름"
+    ERRORS=$((ERRORS + 1))
+  fi
+  if ! grep -q "\*\*버전:\*\* ${LATEST_CHANGELOG_VERSION}" agency-ai-agent-plan.md; then
+    echo "[ERROR] agency-ai-agent-plan.md 버전이 CHANGELOG 최신 버전(${LATEST_CHANGELOG_VERSION})과 다름"
+    ERRORS=$((ERRORS + 1))
+  fi
+fi
+
+if [ -f README.md ] && command -v git >/dev/null 2>&1; then
+  REMOTE_URL=$(git remote get-url origin 2>/dev/null || true)
+  if [ -n "$REMOTE_URL" ] && ! grep -Fq "$REMOTE_URL" README.md; then
+    echo "[ERROR] README.md 의 git clone URL 이 origin 과 다름"
+    ERRORS=$((ERRORS + 1))
+  fi
+fi
+
 check_no_match "@pm|@design|@contract|@fe|@be|@qa|@devops" \
   "@command 방식 발견 (/command 로 유지 필요)" \
   SETUP-GUIDE.md \

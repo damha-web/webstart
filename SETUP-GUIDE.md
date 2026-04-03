@@ -542,6 +542,7 @@ cat _audit/status.md    # 검수 파이프라인
 | [AUDIT-AUTOMATION-V3.md](./AUDIT-AUTOMATION-V3.md) | audit runtime 확장 설계 메모 |
 | [IMPROVEMENT-REPORT.md](./IMPROVEMENT-REPORT.md) | 후속 개선점 정리 |
 | [REVIEW-REPORT.md](./REVIEW-REPORT.md) | 1차 전수 검토 결과 |
+| [REVIEW-REPORT-V2.md](./REVIEW-REPORT-V2.md) | 2차 전수 검토 결과 |
 | [SESSION-REPORT.md](./SESSION-REPORT.md) | 세션 작업 기록 |
 
-위 네 문서는 사용자 사용 설명서가 아니라 repo 내부 의사결정과 작업 기록용 문서로 유지합니다.
+위 다섯 문서는 사용자 사용 설명서가 아니라 repo 내부 의사결정과 작업 기록용 문서로 유지합니다.

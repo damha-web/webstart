@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urljoin, urlparse, urlunparse
 
+import httpx
 import typer
 from pydantic import BaseModel
 from rich.console import Console
@@ -105,7 +106,49 @@ def mask_pii(value: str) -> str:
         "***@***.***",
         value,
     )
-    return re.sub(r"01[0-9]-?[0-9]{3,4}-?[0-9]{4}", "***-****-****", masked)
+    masked = re.sub(r"01[0-9]-?[0-9]{3,4}-?[0-9]{4}", "***-****-****", masked)
+    masked = re.sub(r"\b\d{6}-?[1-4]\d{6}\b", "******-*******", masked)
+    masked = re.sub(r"\b(?:\d[ -]?){13,19}\b", "****-****-****-****", masked)
+    masked = re.sub(
+        r'(?i)("?(?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|authorization)"?\s*[:=]\s*)"[^"]+"',
+        r'\1"***REDACTED***"',
+        masked,
+    )
+    return re.sub(r"(?i)\bBearer\s+[A-Za-z0-9._\-+/=]+\b", "Bearer ***REDACTED***", masked)
+
+
+def load_robots_rules(origin: str) -> tuple[list[str], bool]:
+    robots_url = urljoin(origin, "/robots.txt")
+    try:
+        response = httpx.get(robots_url, timeout=10.0, follow_redirects=True)
+    except Exception:
+        return [], False
+
+    if response.status_code != 200 or not response.text.strip():
+        return [], False
+
+    rules: list[str] = []
+    applies = False
+    for raw_line in response.text.splitlines():
+        line = raw_line.split("#", 1)[0].strip()
+        if not line or ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        key = key.strip().lower()
+        value = value.strip()
+        if key == "user-agent":
+            applies = value in {"*", "webstartaudit", "webstart-audit"}
+            continue
+        if applies and key == "disallow" and value:
+            rules.append(value)
+    return rules, True
+
+
+def is_allowed_by_robots(url: str, origin: str, disallow_rules: list[str]) -> bool:
+    if not same_origin(url, origin):
+        return True
+    path = urlparse(url).path or "/"
+    return not any(path.startswith(rule) for rule in disallow_rules if rule != "/")
 
 
 def render_target_md(
@@ -532,11 +575,13 @@ def crawl(
 
     parsed = urlparse(normalized_url)
     origin = f"{parsed.scheme}://{parsed.netloc}"
+    robots_rules, robots_loaded = load_robots_rules(origin)
     queue: deque[tuple[str, int]] = deque([(normalized_url, 0)])
     visited: set[str] = set()
     pages: list[dict[str, Any]] = []
     edges: list[dict[str, str]] = []
     errors: list[dict[str, str]] = []
+    robots_blocked: list[str] = []
     aggregate_color_counter: Counter[str] = Counter()
 
     with sync_playwright() as playwright:
@@ -546,6 +591,10 @@ def crawl(
         while queue and len(visited) < max_pages:
             current_url, depth = queue.popleft()
             if current_url in visited:
+                continue
+            if not is_allowed_by_robots(current_url, origin, robots_rules):
+                robots_blocked.append(current_url)
+                visited.add(current_url)
                 continue
 
             try:
@@ -598,7 +647,13 @@ def crawl(
                     if not href:
                         continue
                     edges.append({"from": current_url, "to": href, "parent": link.get("parent", "")})
-                    if depth < max_depth and same_origin(href, origin) and href not in visited and href not in queued_urls:
+                    if (
+                        depth < max_depth
+                        and same_origin(href, origin)
+                        and is_allowed_by_robots(href, origin, robots_rules)
+                        and href not in visited
+                        and href not in queued_urls
+                    ):
                         queue.append((href, depth + 1))
                         queued_urls.add(href)
 
@@ -627,15 +682,19 @@ def crawl(
             "collectedAt": date.today().isoformat(),
             "maxPages": max_pages,
             "maxDepth": max_depth,
+            "robotsLoaded": robots_loaded,
+            "robotsDisallowRules": robots_rules,
         },
         "pages": pages,
         "edges": edges,
         "errors": errors,
+        "robotsBlocked": robots_blocked,
         "summary": {
             "visitedPages": len(pages),
             "uniqueScripts": len(unique_scripts),
             "uniqueStyles": len(unique_styles),
             "capturedScreenshots": len(pages),
+            "robotsBlockedPages": len(robots_blocked),
         },
     }
 
@@ -679,7 +738,7 @@ def crawl(
         resolved,
         "target",
         status="done",
-        notes=f"{len(pages)}개 페이지 수집",
+        notes=f"{len(pages)}개 페이지 수집, robots 차단 {len(robots_blocked)}개",
         artifacts=[
             "_audit/target.md",
             "_audit/status.json",
