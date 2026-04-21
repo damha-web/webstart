@@ -71,7 +71,7 @@ fi
 
 if [ -f README.md ] && command -v git >/dev/null 2>&1; then
   REMOTE_URL=$(git remote get-url origin 2>/dev/null || true)
-  if [ -n "$REMOTE_URL" ] && ! grep -Fq "$REMOTE_URL" README.md; then
+  if [ -n "$REMOTE_URL" ] && ! grep -Fq "<your-org>/<your-repo>" README.md && ! grep -Fq "$REMOTE_URL" README.md; then
     echo "[ERROR] README.md 의 git clone URL 이 origin 과 다름"
     ERRORS=$((ERRORS + 1))
   fi

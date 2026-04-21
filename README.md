@@ -144,8 +144,8 @@ claude --version
 ### 처음 설치
 
 ```bash
-git clone https://github.com/hyoukj-png/webstart.git
-cd WebStart
+git clone https://github.com/<your-org>/<your-repo>.git webstart
+cd webstart
 bash install.sh
 ```
 

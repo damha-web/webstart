@@ -64,8 +64,8 @@ Codex 모드로만 쓸 경우에는 `bash install.sh --agent codex`를 사용하
 
 ```bash
 # 1. 저장소 클론
-git clone https://github.com/본인계정/WebStart.git
-cd WebStart
+git clone https://github.com/<your-org>/<your-repo>.git webstart
+cd webstart
 
 # 2. 스킬 설치 (선택한 agent의 skills를 해당 홈 디렉토리의 skills/에 복사)
 bash install.sh
@@ -82,7 +82,7 @@ bash install.sh
 ### 기존 설치 업데이트
 
 ```bash
-cd WebStart
+cd webstart
 git pull
 bash install.sh
 ```
@@ -90,7 +90,7 @@ bash install.sh
 ### Codex로 설치하기
 
 ```bash
-cd WebStart
+cd webstart
 bash install.sh --agent codex
 ```
 
@@ -518,7 +518,7 @@ claude.ai 웹에서 제작 파이프라인을 사용하려면 아래 Projects를
 Codex에서는 Claude Code용 slash command 대신 Codex용 가이드와 대응표를 기준으로 작업한다.
 
 ```bash
-cd WebStart
+cd webstart
 bash install.sh --agent codex
 ```
 
@@ -550,7 +550,7 @@ ls ~/.claude/skills/   # Claude Code
 ls ~/.codex/skills/    # Codex
 
 # 재설치
-cd WebStart
+cd webstart
 bash install.sh
 
 # Claude Code 완전 재시작
