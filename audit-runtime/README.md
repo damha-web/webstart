@@ -54,6 +54,7 @@ bash install.sh --skip-audit-runtime
 webstart-audit doctor
 webstart-audit init --project-dir .
 webstart-audit crawl https://example.com --project-dir . --max-pages 8 --max-depth 2
+webstart-audit crawl https://example.com --project-dir . --discover --full-content
 webstart-audit ux-scan --project-dir .
 webstart-audit ia-scan --project-dir .
 webstart-audit tech-scan --project-dir .
@@ -77,9 +78,11 @@ _audit/
 ├── status.json
 ├── status.md
 ├── scraped-data.json
+├── sitemap.json
 ├── raw/
 │   ├── site-snapshot.json
 │   ├── crawl-data.json
+│   ├── discovery-report.json
 │   ├── tech-scan.json
 │   └── api-scan.json
 ├── derived/
@@ -89,6 +92,7 @@ _audit/
 │   ├── ia-summary.json
 │   ├── tech-summary.json
 │   └── api-summary.json
+├── content/
 ├── reports/
 └── screenshots/
 ```

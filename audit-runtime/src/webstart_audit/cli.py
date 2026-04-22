@@ -7,18 +7,36 @@ from collections import Counter, deque
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
-from urllib.parse import urljoin, urlparse, urlunparse
+from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
 
 import httpx
 import typer
 from pydantic import BaseModel
 from rich.console import Console
 
+from webstart_audit.security import mask_pii
+
 app = typer.Typer(help="WebStart audit runtime CLI")
 console = Console()
 
 DEFAULT_PURPOSE = "기존 사이트 역설계 및 리뉴얼 기획 참고"
 SENSITIVE_HEADERS = {"set-cookie", "authorization", "x-csrf-token", "cookie"}
+TRACKING_PARAMS = frozenset(
+    {
+        "utm_source",
+        "utm_medium",
+        "utm_campaign",
+        "utm_term",
+        "utm_content",
+        "fbclid",
+        "gclid",
+        "ref",
+        "source",
+        "mc_cid",
+        "mc_eid",
+        "_ga",
+    }
+)
 STAGE_META = [
     ("target", "0. 대상 등록", "/audit"),
     ("ux", "1. UX", "/audit-ux"),
@@ -64,6 +82,7 @@ def ensure_audit_dirs(project_dir: Path) -> dict[str, Path]:
         "derived": audit_dir / "derived",
         "reports": audit_dir / "reports",
         "screenshots": audit_dir / "screenshots",
+        "content": audit_dir / "content",
     }
     for path in paths.values():
         path.mkdir(parents=True, exist_ok=True)
@@ -75,7 +94,17 @@ def normalize_url(raw_url: str, base: str | None = None) -> str | None:
     parsed = urlparse(joined)
     if parsed.scheme not in {"http", "https"}:
         return None
-    return urlunparse(parsed._replace(fragment=""))
+    if parsed.query:
+        kept = sorted(
+            (key, value)
+            for key, value in parse_qsl(parsed.query, keep_blank_values=True)
+            if key not in TRACKING_PARAMS
+        )
+        query = urlencode(kept, doseq=True)
+    else:
+        query = ""
+    path = parsed.path.rstrip("/") or "/"
+    return urlunparse(parsed._replace(fragment="", query=query, path=path))
 
 
 def slugify_url(raw_url: str) -> str:
@@ -101,32 +130,15 @@ def dedupe_links(links: list[dict[str, str]]) -> list[dict[str, str]]:
     return result
 
 
-def mask_pii(value: str) -> str:
-    masked = re.sub(
-        r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
-        "***@***.***",
-        value,
-    )
-    masked = re.sub(r"01[0-9]-?[0-9]{3,4}-?[0-9]{4}", "***-****-****", masked)
-    masked = re.sub(r"\b\d{6}-?[1-4]\d{6}\b", "******-*******", masked)
-    masked = re.sub(r"\b(?:\d[ -]?){13,19}\b", "****-****-****-****", masked)
-    masked = re.sub(
-        r'(?i)("?(?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|authorization)"?\s*[:=]\s*)"[^"]+"',
-        r'\1"***REDACTED***"',
-        masked,
-    )
-    return re.sub(r"(?i)\bBearer\s+[A-Za-z0-9._\-+/=]+\b", "Bearer ***REDACTED***", masked)
-
-
-def load_robots_rules(origin: str) -> tuple[list[str], bool]:
+def load_robots_rules(origin: str) -> tuple[list[str], bool, str]:
     robots_url = urljoin(origin, "/robots.txt")
     try:
         response = httpx.get(robots_url, timeout=10.0, follow_redirects=True)
     except Exception:
-        return [], False
+        return [], False, ""
 
     if response.status_code != 200 or not response.text.strip():
-        return [], False
+        return [], False, ""
 
     rules: list[str] = []
     applies = False
@@ -142,7 +154,7 @@ def load_robots_rules(origin: str) -> tuple[list[str], bool]:
             continue
         if applies and key == "disallow" and value:
             rules.append(value)
-    return rules, True
+    return rules, True, response.text
 
 
 def is_allowed_by_robots(url: str, origin: str, disallow_rules: list[str]) -> bool:
@@ -449,6 +461,20 @@ def collect_page_snapshot(page: Any, *, current_url: str, depth: int) -> dict[st
     )
 
 
+def goto_with_retry(page: Any, url: str, retry_count: int) -> Any:
+    last_exc: Exception | None = None
+    for attempt in range(retry_count + 1):
+        try:
+            return page.goto(url, wait_until="networkidle", timeout=30000)
+        except Exception as exc:
+            last_exc = exc
+            if attempt < retry_count:
+                page.wait_for_timeout(2000)
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError(f"failed to navigate to {url}")
+
+
 def render_client_brief(
     *,
     brand_name: str,
@@ -561,6 +587,9 @@ def crawl(
     max_pages: int = typer.Option(8, min=1, max=50, help="최대 수집 페이지 수"),
     max_depth: int = typer.Option(2, min=0, max=5, help="링크 탐색 깊이"),
     delay_ms: int = typer.Option(1000, min=0, max=10000, help="페이지 간 대기 시간(ms)"),
+    discover: bool = typer.Option(False, help="sitemap/RSS 선행 수집"),
+    full_content: bool = typer.Option(False, help="본문 콘텐츠 추출 및 content/ 미러링"),
+    retry: int = typer.Option(2, min=0, max=5, help="실패 페이지 재시도 횟수"),
 ) -> None:
     """동일 origin 기준으로 다중 페이지 BFS 크롤링을 수행합니다."""
 
@@ -576,7 +605,7 @@ def crawl(
 
     parsed = urlparse(normalized_url)
     origin = f"{parsed.scheme}://{parsed.netloc}"
-    robots_rules, robots_loaded = load_robots_rules(origin)
+    robots_rules, robots_loaded, robots_text = load_robots_rules(origin)
     queue: deque[tuple[str, int]] = deque([(normalized_url, 0)])
     visited: set[str] = set()
     pages: list[dict[str, Any]] = []
@@ -585,9 +614,36 @@ def crawl(
     robots_blocked: list[str] = []
     aggregate_color_counter: Counter[str] = Counter()
     screenshot_count = 0
+    discovery_report: dict[str, Any] | None = None
 
     PC_VIEWPORT = {"width": 1920, "height": 1080}
     MOBILE_VIEWPORT = {"width": 375, "height": 812}
+
+    if discover:
+        from webstart_audit.discovery import discover as run_discovery
+
+        disc = run_discovery(origin, robots_text)
+        queued_seed = {queued_url for queued_url, _ in queue}
+        for disc_url in disc.urls:
+            normed = normalize_url(disc_url)
+            if (
+                normed
+                and normed not in visited
+                and normed not in queued_seed
+                and same_origin(normed, origin)
+            ):
+                # discovery로 찾은 URL은 root와 동등한 seed로 취급한다.
+                # depth=0으로 넣어야 --max-depth=N 설정 시 자식 페이지 탐색이 기대대로 동작한다.
+                queue.append((normed, 0))
+                queued_seed.add(normed)
+        discovery_report = {
+            "origin": origin,
+            "generatedAt": datetime.now().isoformat(timespec="seconds"),
+            "sourceDetail": disc.source_detail,
+            "urls": disc.urls,
+        }
+        write_json(paths["raw"] / "discovery-report.json", discovery_report)
+        console.print(f"discovery: {disc.source_detail}")
 
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
@@ -603,7 +659,7 @@ def crawl(
                 continue
 
             try:
-                response = page.goto(current_url, wait_until="networkidle", timeout=30000)
+                response = goto_with_retry(page, current_url, retry)
                 snapshot = collect_page_snapshot(page, current_url=current_url, depth=depth)
                 slug = slugify_url(current_url)
                 page_num = f"{len(pages)+1:03d}"
@@ -692,7 +748,7 @@ def crawl(
         for value, count in aggregate_color_counter.most_common(25)
     ]
 
-    crawl_payload = {
+    crawl_payload: dict[str, Any] = {
         "target": {
             "url": normalized_url,
             "origin": origin,
@@ -702,6 +758,7 @@ def crawl(
             "robotsLoaded": robots_loaded,
             "robotsDisallowRules": robots_rules,
         },
+        "discovery": discovery_report,
         "pages": pages,
         "edges": edges,
         "errors": errors,
@@ -712,10 +769,16 @@ def crawl(
             "uniqueStyles": len(unique_styles),
             "capturedScreenshots": screenshot_count,
             "robotsBlockedPages": len(robots_blocked),
+            "discoveredUrls": discovery_report["sourceDetail"]["total_unique"] if discovery_report else 0,
+            "fullContentEnabled": full_content,
+            "contentMirrored": 0,
+            "contentErrors": 0,
         },
     }
 
-    write_json(paths["raw"] / "crawl-data.json", crawl_payload)
+    # crawl-data.json 저장은 full_content 단계 이후로 미룬다.
+    # 그래야 content 추출 중 발생한 에러도 errors 필드에 반영되고,
+    # contentMirrored/contentErrors가 요약에 함께 기록된다.
     write_json(paths["derived"] / "pages.json", pages)
     write_json(paths["derived"] / "link-graph.json", edges)
 
@@ -752,18 +815,79 @@ def crawl(
             encoding="utf-8",
         )
 
+        if full_content:
+            from webstart_audit.extractor import (
+                build_sitemap_json,
+                extract_content,
+                resolve_content_paths,
+                render_content_md,
+            )
+
+            all_urls = [page_data["url"] for page_data in pages]
+            path_map = resolve_content_paths(all_urls)
+            content_written = 0
+            content_errors_before = len(errors)
+
+            with sync_playwright() as content_playwright:
+                content_browser = content_playwright.chromium.launch()
+                content_page = content_browser.new_page(viewport=PC_VIEWPORT)
+                try:
+                    for index, page_data in enumerate(pages):
+                        page_url = page_data["url"]
+                        file_path = resolved / path_map[page_url]
+                        file_path.parent.mkdir(parents=True, exist_ok=True)
+                        try:
+                            goto_with_retry(content_page, page_url, retry)
+                            content = extract_content(content_page)
+                            markdown = render_content_md(
+                                url=page_url,
+                                title=page_data["title"],
+                                depth=page_data["depth"],
+                                status=page_data["status"],
+                                content=content,
+                                screenshot=page_data.get("screenshot"),
+                                screenshot_mobile=page_data.get("screenshot_mobile"),
+                                crawled_at=datetime.now().isoformat(timespec="seconds"),
+                            )
+                            file_path.write_text(markdown, encoding="utf-8")
+                            content_written += 1
+                        except Exception as exc:  # pragma: no cover
+                            errors.append({"url": page_url, "error": f"content: {exc}"})
+                        # 두 번째 방문 루프에도 delay_ms를 적용해야 rate limit 위험을 막는다.
+                        if delay_ms and index < len(pages) - 1:
+                            content_page.wait_for_timeout(delay_ms)
+                finally:
+                    content_browser.close()
+
+            crawl_payload["summary"]["contentMirrored"] = content_written
+            crawl_payload["summary"]["contentErrors"] = len(errors) - content_errors_before
+
+            build_sitemap_json(pages, path_map, resolved, root_url=normalized_url)
+            console.print(
+                f"content mirrored: {content_written}, sitemap saved: {resolved / '_audit' / 'sitemap.json'}"
+            )
+
+    write_json(paths["raw"] / "crawl-data.json", crawl_payload)
+
+    artifacts = [
+        "_audit/target.md",
+        "_audit/status.json",
+        "_audit/status.md",
+        "_audit/scraped-data.json",
+        "_audit/raw/crawl-data.json",
+    ]
+    if discovery_report:
+        artifacts.append("_audit/raw/discovery-report.json")
+    if full_content and pages:
+        artifacts.append("_audit/sitemap.json")
+        artifacts.append("_audit/content/")
+
     mark_stage(
         resolved,
         "target",
         status="done",
         notes=f"{len(pages)}개 페이지 수집, robots 차단 {len(robots_blocked)}개",
-        artifacts=[
-            "_audit/target.md",
-            "_audit/status.json",
-            "_audit/status.md",
-            "_audit/scraped-data.json",
-            "_audit/raw/crawl-data.json",
-        ],
+        artifacts=artifacts,
     )
     reset_downstream_stages(resolved, "target")
 
